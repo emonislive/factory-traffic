@@ -1,0 +1,792 @@
+openapi: 3.1.0
+info:
+  title: Factory Traffic Management System API
+  version: 1.0.0
+  description: API for managing internal factory road traffic at intersections (CSI Smart Tech Assessment V2).
+paths:
+  /api/junctions:
+    get:
+      summary: List all junctions
+      operationId: listJunctions
+      responses:
+        '200':
+          description: List of junctions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JunctionSummary'
+    post:
+      summary: Create a new junction configuration
+      operationId: createJunction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateJunctionRequest'
+      responses:
+        '201':
+          description: Junction created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JunctionDetail'
+        '409':
+          description: Junction already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid junction configuration (e.g., overlapping phases)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/junctions/{id}:
+    get:
+      summary: Get junction details and configuration
+      operationId: getJunction
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Junction details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JunctionDetail'
+        '404':
+          description: Junction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/sensor-events:
+    post:
+      summary: Ingest vehicle detection sensor events
+      operationId: ingestSensorEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorEventRequest'
+      responses:
+        '201':
+          description: Sensor event applied to queue/traffic state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorEventResponse'
+        '200':
+          description: Duplicate event ignored idempotently
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorEventResponse'
+        '202':
+          description: Event recorded but not applied (e.g. stale or orphan clear)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorEventResponse'
+        '404':
+          description: Unknown junction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed event or unknown vehicle type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/junctions/{id}/status:
+    get:
+      summary: Get live junction status
+      operationId: getJunctionStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current live junction status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JunctionStatusResponse'
+        '404':
+          description: Junction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/junctions/{id}/commands:
+    post:
+      summary: Issue manual or administrative control command
+      operationId: issueCommand
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminCommandRequest'
+      responses:
+        '202':
+          description: Command accepted and queued for transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminCommandResponse'
+        '404':
+          description: Junction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Command conflict (e.g. junction DEGRADED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid command parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/controller-events:
+    post:
+      summary: Ingest physical or simulated traffic controller responses
+      operationId: ingestControllerEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControllerEventRequest'
+      responses:
+        '200':
+          description: Controller acknowledgement processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControllerEventResponse'
+        '404':
+          description: Unknown command_id or junction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed controller event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/device-status:
+    post:
+      summary: Report device status changes (sensor or controller online/offline)
+      operationId: reportDeviceStatus
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceStatusRequest'
+      responses:
+        '200':
+          description: Device status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceStatusResponse'
+        '404':
+          description: Unknown junction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Malformed device status event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/junctions/{id}/history:
+    get:
+      summary: Query junction audit history
+      operationId: getJunctionHistory
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: before_id
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: event_type
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Paginated audit history records
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AuditLogEntry'
+        '404':
+          description: Junction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/junctions/{id}/stream:
+    get:
+      summary: Stream live junction state via Server-Sent Events (SSE)
+      operationId: streamJunctionStatus
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Real-time event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '404':
+          description: Junction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/simulator/{id}/mode:
+    post:
+      summary: Set simulator behavior mode for demo/testing
+      operationId: setSimulatorMode
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetSimulatorModeRequest'
+      responses:
+        '200':
+          description: Simulator mode updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SetSimulatorModeResponse'
+        '404':
+          description: Junction not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Invalid mode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    Direction:
+      type: string
+      enum: [NORTH, SOUTH, EAST, WEST]
+
+    Phase:
+      type: string
+      enum: [NS, EW]
+
+    Signal:
+      type: string
+      enum: [RED, YELLOW, GREEN, UNKNOWN]
+
+    Mode:
+      type: string
+      enum: [AUTOMATIC, MANUAL, EMERGENCY, DEGRADED]
+
+    VehicleType:
+      type: string
+      enum: [EMERGENCY, TRUCK, FORKLIFT, EMPLOYEE_VEHICLE]
+
+    Step:
+      type: string
+      enum: [BOOT, GREEN, YELLOW, ALL_RED]
+
+    SimulatorMode:
+      type: string
+      enum: [AUTO_ACK, DELAYED, SILENT, OFFLINE]
+
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          example: JUNCTION_DEGRADED
+        message:
+          type: string
+          example: Junction controller is offline; commands rejected.
+        details:
+          type: object
+          additionalProperties: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
+    JunctionSummary:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          example: "A"
+        name:
+          type: string
+          example: "Main Assembly Crossing"
+
+    CreateJunctionRequest:
+      type: object
+      required:
+        - id
+        - name
+        - phases
+      properties:
+        id:
+          type: string
+          example: "A"
+        name:
+          type: string
+          example: "Main Assembly Crossing"
+        phases:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/Direction'
+          example:
+            NS: [NORTH, SOUTH]
+            EW: [EAST, WEST]
+        timings:
+          type: object
+          properties:
+            green: { type: number, default: 30.0 }
+            yellow: { type: number, default: 5.0 }
+            all_red: { type: number, default: 2.0 }
+            min_green: { type: number, default: 10.0 }
+            max_green: { type: number, default: 60.0 }
+            ack_timeout: { type: number, default: 3.0 }
+            max_retries: { type: integer, default: 2 }
+            starvation_after: { type: number, default: 90.0 }
+            emergency_timeout: { type: number, default: 120.0 }
+            manual_lease: { type: number, default: 300.0 }
+            stale_event_after: { type: number, default: 300.0 }
+
+    JunctionDetail:
+      type: object
+      required:
+        - id
+        - name
+        - config
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        config:
+          type: object
+        created_at:
+          type: string
+          format: date-time
+
+    SensorEventRequest:
+      type: object
+      required:
+        - event_id
+        - junction_id
+        - direction
+        - event_type
+        - vehicle_id
+        - sequence_no
+        - timestamp
+      properties:
+        event_id:
+          type: string
+          example: "evt-10001"
+        junction_id:
+          type: string
+          example: "A"
+        direction:
+          $ref: '#/components/schemas/Direction'
+        event_type:
+          type: string
+          enum: [VEHICLE_ARRIVED, VEHICLE_CLEARED]
+          example: "VEHICLE_ARRIVED"
+        vehicle_id:
+          type: string
+          example: "VH-501"
+        vehicle_type:
+          $ref: '#/components/schemas/VehicleType'
+        sequence_no:
+          type: integer
+          example: 1501
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-10-05T10:15:20Z"
+
+    SensorEventResponse:
+      type: object
+      required:
+        - event_id
+        - status
+      properties:
+        event_id:
+          type: string
+        status:
+          type: string
+          enum: [APPLIED, DUPLICATE, NOT_APPLIED]
+        duplicate:
+          type: boolean
+          default: false
+        reason:
+          type: string
+          nullable: true
+
+    JunctionStatusResponse:
+      type: object
+      required:
+        - junction_id
+        - mode
+        - phase
+        - controller_status
+        - desired_signals
+        - actual_signals
+        - queues
+        - transition
+        - pending_commands
+        - emergency
+        - manual
+        - alerts
+        - device_statuses
+        - stale_queues
+      properties:
+        junction_id:
+          type: string
+          example: "A"
+        mode:
+          $ref: '#/components/schemas/Mode'
+        phase:
+          type: string
+          example: "NORTH_SOUTH"
+        controller_status:
+          type: string
+          example: "ONLINE"
+        desired_signals:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Signal'
+        actual_signals:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Signal'
+        queues:
+          type: object
+          additionalProperties:
+            type: integer
+        transition:
+          type: object
+          required:
+            - step
+            - target
+            - deadline_at
+          properties:
+            step:
+              $ref: '#/components/schemas/Step'
+            target:
+              type: string
+              nullable: true
+            deadline_at:
+              type: number
+              nullable: true
+        pending_commands:
+          type: array
+          items:
+            type: string
+        emergency:
+          type: object
+          required:
+            - active
+            - direction
+            - vehicle_id
+          properties:
+            active:
+              type: boolean
+            direction:
+              type: string
+              nullable: true
+            vehicle_id:
+              type: string
+              nullable: true
+        manual:
+          type: object
+          required:
+            - active
+            - lease_expires_at
+            - issued_by
+          properties:
+            active:
+              type: boolean
+            lease_expires_at:
+              type: number
+              nullable: true
+            issued_by:
+              type: string
+              nullable: true
+        alerts:
+          type: array
+          items:
+            type: string
+            enum:
+              - CONTROLLER_OFFLINE
+              - SIGNAL_FAILURE
+              - SENSOR_FAILURE
+              - STATE_MISMATCH
+              - COMMAND_TIMEOUT
+              - UNKNOWN_DEVICE_STATE
+        device_statuses:
+          type: object
+          additionalProperties:
+            type: object
+        stale_queues:
+          type: array
+          items:
+            $ref: '#/components/schemas/Direction'
+
+    AdminCommandRequest:
+      type: object
+      required:
+        - command
+      properties:
+        command:
+          type: string
+          enum: [MANUAL_GREEN_REQUEST, RETURN_TO_AUTOMATIC]
+          example: "MANUAL_GREEN_REQUEST"
+        direction:
+          $ref: '#/components/schemas/Direction'
+        issued_by:
+          type: string
+          example: "admin-1"
+
+    AdminCommandResponse:
+      type: object
+      required:
+        - status
+        - message
+      properties:
+        status:
+          type: string
+          example: "ACCEPTED"
+        message:
+          type: string
+
+    ControllerEventRequest:
+      type: object
+      required:
+        - command_id
+        - junction_id
+        - status
+      properties:
+        command_id:
+          type: string
+          example: "cmd-8001"
+        junction_id:
+          type: string
+          example: "A"
+        direction:
+          $ref: '#/components/schemas/Direction'
+        status:
+          type: string
+          enum: [ACK, NACK]
+          example: "ACK"
+        actual_state:
+          $ref: '#/components/schemas/Signal'
+          example: "GREEN"
+        reason:
+          type: string
+          nullable: true
+
+    ControllerEventResponse:
+      type: object
+      required:
+        - command_id
+        - status
+      properties:
+        command_id:
+          type: string
+        status:
+          type: string
+          example: "PROCESSED"
+        duplicate:
+          type: boolean
+          default: false
+
+    DeviceStatusRequest:
+      type: object
+      required:
+        - event_id
+        - junction_id
+        - device_type
+        - status
+        - timestamp
+      properties:
+        event_id:
+          type: string
+          example: "status-301"
+        junction_id:
+          type: string
+          example: "A"
+        device_type:
+          type: string
+          enum: [SIGNAL_CONTROLLER, SENSOR]
+          example: "SIGNAL_CONTROLLER"
+        direction:
+          $ref: '#/components/schemas/Direction'
+        status:
+          type: string
+          enum: [ONLINE, OFFLINE, DEGRADED, WARNING, UNKNOWN]
+          example: "OFFLINE"
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-10-05T10:30:00Z"
+
+    DeviceStatusResponse:
+      type: object
+      required:
+        - event_id
+        - status
+      properties:
+        event_id:
+          type: string
+        status:
+          type: string
+          example: "UPDATED"
+
+    AuditLogEntry:
+      type: object
+      required:
+        - id
+        - junction_id
+        - event_type
+        - occurred_at
+      properties:
+        id:
+          type: integer
+        junction_id:
+          type: string
+        event_type:
+          type: string
+        direction:
+          type: string
+          nullable: true
+        previous_state:
+          type: string
+          nullable: true
+        new_state:
+          type: string
+          nullable: true
+        command_id:
+          type: string
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+        payload:
+          type: object
+        occurred_at:
+          type: string
+          format: date-time
+        source:
+          type: string
+
+    SetSimulatorModeRequest:
+      type: object
+      required:
+        - mode
+      properties:
+        mode:
+          $ref: '#/components/schemas/SimulatorMode'
+
+    SetSimulatorModeResponse:
+      type: object
+      required:
+        - junction_id
+        - mode
+      properties:
+        junction_id:
+          type: string
+        mode:
+          $ref: '#/components/schemas/SimulatorMode'
