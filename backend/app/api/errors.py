@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -50,6 +51,19 @@ async def app_error_handler(request: Request, exc: Exception) -> JSONResponse:
                 "code": "INTERNAL_SERVER_ERROR",
                 "message": "Internal server error",
                 "details": {},
+            }
+        },
+    )
+
+
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "Request validation failed",
+                "details": {"errors": exc.errors()},
             }
         },
     )

@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     BigInteger,
     DateTime,
     Float,
@@ -19,12 +20,16 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+JSONB_COMPAT = JSON().with_variant(postgresql.JSONB(), "postgresql")
+BIGINT_PK = BigInteger().with_variant(Integer, "sqlite")
 
 
 class Base(DeclarativeBase):
     pass
+
 
 
 class JunctionModel(Base):
@@ -32,7 +37,7 @@ class JunctionModel(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    config: Mapped[dict[str, Any]] = mapped_column(JSONB_COMPAT, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -50,10 +55,10 @@ class JunctionStateModel(Base):
     step: Mapped[str] = mapped_column(String(32), nullable=False)
     target: Mapped[str | None] = mapped_column(String(16), nullable=True)
     deadline_at: Mapped[float | None] = mapped_column(Float, nullable=True)
-    desired: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    actual: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    manual: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
-    emergencies: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    desired: Mapped[dict[str, Any]] = mapped_column(JSONB_COMPAT, nullable=False)
+    actual: Mapped[dict[str, Any]] = mapped_column(JSONB_COMPAT, nullable=False)
+    manual: Mapped[dict[str, Any]] = mapped_column(JSONB_COMPAT, nullable=False)
+    emergencies: Mapped[list[Any]] = mapped_column(JSONB_COMPAT, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -62,7 +67,7 @@ class JunctionStateModel(Base):
 class VehicleModel(Base):
     __tablename__ = "vehicles"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     junction_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("junctions.id", ondelete="CASCADE"), nullable=False
     )
@@ -102,7 +107,7 @@ class ProcessedEventModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     outcome: Mapped[str] = mapped_column(String(32), nullable=False)
-    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB_COMPAT, nullable=False)
 
 
 class DirectionSequenceModel(Base):
@@ -150,7 +155,7 @@ class DeviceStatusModel(Base):
 class AuditLogModel(Base):
     __tablename__ = "audit_log"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(BIGINT_PK, primary_key=True, autoincrement=True)
     junction_id: Mapped[str] = mapped_column(
         String(64), ForeignKey("junctions.id", ondelete="CASCADE"), nullable=False
     )
@@ -160,7 +165,7 @@ class AuditLogModel(Base):
     new_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
     command_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB_COMPAT, nullable=True)
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

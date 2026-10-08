@@ -1,0 +1,405 @@
+{
+  "info": {
+    "_postman_id": "c1f7a40a-1102-463d-9d41-e945cf40f35a",
+    "name": "Factory Traffic Management System API",
+    "description": "Postman Collection v2.1.0 for the Factory Traffic Management System API (CSI Smart Tech Assessment V2).\nCovers all 11 endpoints specified in contracts/openapi.yaml, including sensor event ingestion, manual control commands, controller telemetry, audit history, simulator configuration, and SSE streaming.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string",
+      "description": "Base URL of the Factory Traffic backend API"
+    },
+    {
+      "key": "junctionId",
+      "value": "A",
+      "type": "string",
+      "description": "Identifier for the target junction (default 'A')"
+    }
+  ],
+  "item": [
+    {
+      "name": "Junctions",
+      "description": "Junction configuration and management endpoints",
+      "item": [
+        {
+          "name": "List Junctions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions"]
+            },
+            "description": "Retrieve summary list of all registered junctions in the factory."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Junction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"B\",\n  \"name\": \"Warehouse Logistics Crossing\",\n  \"phases\": {\n    \"NS\": [\"NORTH\", \"SOUTH\"],\n    \"EW\": [\"EAST\", \"WEST\"]\n  },\n  \"timings\": {\n    \"green\": 30.0,\n    \"yellow\": 5.0,\n    \"all_red\": 2.0,\n    \"min_green\": 10.0,\n    \"max_green\": 60.0,\n    \"ack_timeout\": 3.0,\n    \"max_retries\": 2,\n    \"starvation_after\": 90.0,\n    \"emergency_timeout\": 120.0,\n    \"manual_lease\": 300.0,\n    \"stale_event_after\": 300.0\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions"]
+            },
+            "description": "Register a new junction with validated non-conflicting phases and timing parameters."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Junction Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions/{{junctionId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions", "{{junctionId}}"]
+            },
+            "description": "Fetch configuration and metadata for a specific junction."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Live Junction Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions/{{junctionId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions", "{{junctionId}}", "status"]
+            },
+            "description": "Get real-time operational status of the junction (desired/actual signals, queues, mode, transition step, alerts)."
+          },
+          "response": []
+        },
+        {
+          "name": "Stream Junction Status (SSE)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions/{{junctionId}}/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions", "{{junctionId}}", "stream"]
+            },
+            "description": "Subscribe to real-time Server-Sent Events (SSE) emitting status updates and heartbeat pings."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Junction Audit History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions/{{junctionId}}/history?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions", "{{junctionId}}", "history"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Max entries to return"
+                },
+                {
+                  "key": "before_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Cursor pagination before ID"
+                },
+                {
+                  "key": "event_type",
+                  "value": "STATE_CHANGE",
+                  "disabled": true,
+                  "description": "Filter by event type"
+                }
+              ]
+            },
+            "description": "Query append-only audit trail for compliance, post-incident review, and debugging."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Sensor Events",
+      "description": "Ingestion of vehicle presence events from inductive loops or cameras",
+      "item": [
+        {
+          "name": "Ingest Vehicle Arrival (Truck)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt-arr-101\",\n  \"junction_id\": \"{{junctionId}}\",\n  \"direction\": \"NORTH\",\n  \"event_type\": \"VEHICLE_ARRIVED\",\n  \"vehicle_id\": \"TRUCK-01\",\n  \"vehicle_type\": \"TRUCK\",\n  \"sequence_no\": 1,\n  \"timestamp\": \"2026-10-08T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sensor-events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sensor-events"]
+            },
+            "description": "Notify system of vehicle arrival on an intersection approach."
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest Vehicle Arrival (Emergency)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt-arr-999\",\n  \"junction_id\": \"{{junctionId}}\",\n  \"direction\": \"EAST\",\n  \"event_type\": \"VEHICLE_ARRIVED\",\n  \"vehicle_id\": \"AMBULANCE-01\",\n  \"vehicle_type\": \"EMERGENCY\",\n  \"sequence_no\": 2,\n  \"timestamp\": \"2026-10-08T12:01:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sensor-events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sensor-events"]
+            },
+            "description": "Emergency vehicle arrival triggering immediate preemption sequence."
+          },
+          "response": []
+        },
+        {
+          "name": "Ingest Vehicle Clearance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"evt-clr-101\",\n  \"junction_id\": \"{{junctionId}}\",\n  \"direction\": \"NORTH\",\n  \"event_type\": \"VEHICLE_CLEARED\",\n  \"vehicle_id\": \"TRUCK-01\",\n  \"sequence_no\": 3,\n  \"timestamp\": \"2026-10-08T12:02:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/sensor-events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "sensor-events"]
+            },
+            "description": "Vehicle clearance notification decrementing waiting queue."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Operator Commands",
+      "description": "Administrative manual overrides and dispatch commands",
+      "item": [
+        {
+          "name": "Request Manual Green",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"MANUAL_GREEN_REQUEST\",\n  \"direction\": \"EAST\",\n  \"issued_by\": \"dispatcher-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions/{{junctionId}}/commands",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions", "{{junctionId}}", "commands"]
+            },
+            "description": "Request manual override green for a direction with time-bounded lease (300s)."
+          },
+          "response": []
+        },
+        {
+          "name": "Return to Automatic",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command\": \"RETURN_TO_AUTOMATIC\",\n  \"issued_by\": \"dispatcher-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/junctions/{{junctionId}}/commands",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "junctions", "{{junctionId}}", "commands"]
+            },
+            "description": "Relinquish manual control lease and return junction to automatic scheduling."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Hardware Controller & Devices",
+      "description": "Physical signal controller acknowledgements and health status telemetry",
+      "item": [
+        {
+          "name": "Controller Acknowledgement (ACK)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"command_id\": \"cmd-demo-1\",\n  \"junction_id\": \"{{junctionId}}\",\n  \"direction\": \"NORTH\",\n  \"status\": \"ACK\",\n  \"actual_state\": \"GREEN\",\n  \"reason\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/controller-events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "controller-events"]
+            },
+            "description": "Signal controller telemetry confirming physical lamp state change."
+          },
+          "response": []
+        },
+        {
+          "name": "Report Device Status",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event_id\": \"dev-stat-1\",\n  \"junction_id\": \"{{junctionId}}\",\n  \"device_type\": \"SIGNAL_CONTROLLER\",\n  \"direction\": \"NORTH\",\n  \"status\": \"ONLINE\",\n  \"timestamp\": \"2026-10-08T12:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/device-status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "device-status"]
+            },
+            "description": "Report device health state change (ONLINE, OFFLINE, DEGRADED, WARNING, UNKNOWN)."
+          },
+          "response": []
+        },
+        {
+          "name": "Set Simulator Mode",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"AUTO_ACK\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/simulator/{{junctionId}}/mode",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "simulator", "{{junctionId}}", "mode"]
+            },
+            "description": "Switch mock controller behavior at runtime (AUTO_ACK, DELAYED, SILENT, OFFLINE)."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

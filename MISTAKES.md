@@ -85,3 +85,42 @@ This file logs bugs found and fixed during development, per the self-correction 
   7. Accepted `RETURN_TO_AUTOMATIC` in `Mode.DEGRADED` without physical signal changes per P-04.
 - Regression test: `backend/tests/domain/test_engine.py::test_regression_emergency_during_all_red_with_green_commanded_no_deadlock`, `test_regression_d16_fcfs_competing_emergencies_arrival_order`, `test_regression_d15_emergency_terminates_manual_no_revival`, `test_regression_d19_controller_nack_sets_actual_unknown`, `test_regression_d19_controller_reconnect_recovers_to_automatic`, `test_regression_d20_restart_mid_transition_clears_target`, `test_regression_p04_return_to_automatic_accepted_in_degraded`, `test_d14_unknown_vehicle_types_rejected`, `test_repeated_emergency_event_does_not_duplicate_or_retrigger`, `test_ack_never_arrives_holds_transition_safely`.
 - Decision or invariant involved: D-08, D-14, D-15, D-16, D-17, D-18, D-19, D-20, P-04, INV-1, INV-2, INV-3, INV-4, INV-7, INV-8, INV-9.
+
+## M-008 · CommandTracker attempt counter reset on retry prevented degradation to DEGRADED
+- Agent / date: Agent C (Runtime, Controller, Recovery) / 2026-10-08
+- What went wrong: When controller commands were retried on timeout in `junction_worker.py`, `command_tracker.record_command_sent` was called post-commit, which unconditionally re-instantiated `TrackedCommand(..., attempts=1)`, resetting the attempt count back to 1 and preventing the junction from ever reaching `max_retries` and degrading to `Mode.DEGRADED`. In addition, `CommandRepository.record_command` raised duplicate key constraint errors when recording retried commands.
+- Root cause: `CommandTracker.record_command_sent` did not check if the command was already tracked before creating a fresh `TrackedCommand`, and `CommandRepository.record_command` did not handle existing command rows.
+- Fix:
+  1. Updated `CommandTracker.record_command_sent` to preserve and return the existing `TrackedCommand` if `command_id` is already present.
+  2. Updated `CommandRepository.record_command` to update `attempts`, `sent_at`, and `deadline_at` on duplicate command ID rather than failing with duplicate key error.
+- Regression test: `backend/tests/application/test_application.py::test_silent_controller_leads_to_degraded_after_retries`.
+- Decision or invariant involved: D-19, INV-7, P-04.
+
+
+## M-009 · Boot recovery discarded persistent waiting vehicles, active manual leases, and failed to record controller NACKs in DB
+- Agent / date: Agent B/Reviewer / 2026-10-08
+- What went wrong:
+  1. In `backend/app/application/recovery.py`, `state_model` and `waiting` were queried from the database on reboot, logged via `logger.info`, but never assigned back to `worker.state`. This caused `worker.state.waiting_vehicles` to remain empty, wiped active manual leases, and caused the domain `Boot` event to find 0 emergency vehicles, silently clearing emergency mode and reporting all queue counts as 0 after restart in violation of `D-20` and `INV-8`.
+  2. `recovery.py` omitted calling `worker.command_tracker.abandon_all()`, leaving stale in-flight commands tracked across process restart.
+  3. In `backend/app/application/junction_worker.py`, incoming `ControllerNack` events were not validated against `command_tracker` or the database, returning 200 instead of 404 for unknown command IDs.
+  4. NACKed or timed-out commands were never transitioned to `status = "FAILED"` in `CommandRepository` / database (`CommandRepository` lacked a `record_failed` method).
+  5. In `backend/app/api/routers.py`, `_get_worker_or_404` started a worker for newly registered junctions found in the database without calling `recover_junction`, leading to unrecovered state if loaded dynamically.
+  6. In `junction_worker.py`, `get_status_dict()` hardcoded `stale_queues = []` and omitted sensor device statuses.
+  7. Scenario 8 tests in `test_scenarios.py` and `demo.py` were superficial—only checking `actual == UNKNOWN` without asserting queue retention or emergency state preservation across reboot.
+- Root cause: Partial implementation of `recover_junction` where DB fetch was executed for logging only without populating in-memory domain state; missing `FAILED` state transitions in repository; and missing dynamic worker recovery hook.
+- Fix:
+  1. Updated `recovery.py` to restore `version`, `mode`, `serving`, `manual` lease, and deserialize `WaitingVehicle` domain objects into `worker.state.waiting_vehicles` before emitting `Boot`, and invoked `worker.command_tracker.abandon_all()`.
+  2. Added `record_failed(command_id)` in `CommandRepository` to transition commands to `FAILED` in the database.
+  3. Added command validation in `junction_worker.py` for `ControllerNack` to reject unknown command IDs with 404, mark commands failed in `command_tracker` and database upon NACK or timeout past `max_retries`.
+  4. Updated `_get_worker_or_404` to run `recover_junction` when dynamically instantiating workers from DB.
+  5. Added dynamic `stale_queues` tracking based on offline sensor device statuses in `junction_worker.py`.
+  6. Upgraded Scenario 8 in `test_scenarios.py` and `scripts/demo.py` to ingest vehicles prior to reboot and assert persistent queue retention alongside `INV-8`.
+- Regression test:
+  - `backend/tests/application/test_application.py::test_regression_boot_recovery_restores_waiting_vehicles_and_emergency_mode`
+  - `backend/tests/application/test_application.py::test_regression_boot_recovery_restores_manual_lease`
+  - `backend/tests/application/test_application.py::test_regression_controller_nack_marks_command_failed_in_db_and_rejects_unknown`
+  - `backend/tests/application/test_application.py::test_regression_sensor_offline_reports_stale_queues_and_device_status`
+  - `backend/tests/scenarios/test_scenarios.py::test_scenario_8_restart_recovery`
+  - `scripts/demo.py` (Scenario 8)
+- Decision or invariant involved: D-19, D-20, P-02, INV-8.
+
